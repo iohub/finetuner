@@ -5,6 +5,13 @@ from datasets import load_dataset
 from unsloth.chat_templates import standardize_data_formats
 from trl import SFTTrainer, SFTConfig
 from unsloth.chat_templates import train_on_responses_only
+import os
+
+# Fix for dynamo recompilation limit issue
+torch._dynamo.config.cache_size_limit = 64
+torch._dynamo.config.accumulated_cache_size_limit = 256
+# Alternative: Disable torch compile entirely (uncomment if cache increase doesn't work)
+# torch._dynamo.config.disable = True
 
 
 model, tokenizer = FastModel.from_pretrained(
@@ -55,6 +62,8 @@ trainer = SFTTrainer(
     eval_dataset = None, # Can set up evaluation!
     args = SFTConfig(
         dataset_text_field = "text",
+        output_dir = "./training_outputs",  # 输出目录，TensorBoard日志将保存在这里
+        logging_dir = "./training_logs",    # TensorBoard日志目录
         per_device_train_batch_size = 2,
         gradient_accumulation_steps = 4, # Use GA to mimic batch size!
         warmup_steps = 5,
@@ -62,11 +71,16 @@ trainer = SFTTrainer(
         max_steps = 30,
         learning_rate = 2e-4, # Reduce to 2e-5 for long training runs
         logging_steps = 1,
+        logging_strategy = "steps",         # 按步数记录日志
+        save_steps = 10,                    # 每10步保存一次模型
+        save_strategy = "steps",            # 按步数保存
         optim = "adamw_8bit",
         weight_decay = 0.01,
         lr_scheduler_type = "linear",
         seed = 3407,
-        report_to = "none", # Use this for WandB etc
+        report_to = "tensorboard",          # 使用TensorBoard进行监控
+        run_name = "gemma3-finetune",       # 运行名称
+        dataloader_num_workers = 2,         # 数据加载器的工作进程数
     ),
 )
 
