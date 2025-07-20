@@ -17,9 +17,9 @@ torch._dynamo.config.accumulated_cache_size_limit = 256
 model, tokenizer = FastModel.from_pretrained(
     model_name="/media/do/llmhub/modelhub/gemma-3-4b-it",
     dtype = None,
-    max_seq_length=1024,
-    load_in_4bit=True,
-    load_in_8bit=False,
+    max_seq_length=2048,  # 从5000降低到2048，平衡性能和内存
+    load_in_4bit=False,
+    load_in_8bit=True,
     full_finetuning=False
 )
 
@@ -31,9 +31,9 @@ model = FastModel.get_peft_model(
     finetune_attention_modules = True,  # Attention good for GRPO
     finetune_mlp_modules       = True, 
 
-    r = 8,           # Larger = higher accuracy, but might overfit
-    lora_alpha = 8,  # Recommended alpha == r at least
-    lora_dropout = 0,
+    r = 16,           # 增加r值以提高模型容量
+    lora_alpha = 32,  # alpha = 2 * r 通常效果更好
+    lora_dropout = 0,  # 改回0以获得最佳Unsloth性能
     bias = "none",
     random_state = 3407,
 )
@@ -55,32 +55,39 @@ dataset = load_dataset("mlabonne/FineTome-100k", split = "train")
 dataset = standardize_data_formats(dataset)
 dataset = dataset.map(formatting_prompts_func, batched = True)
 
+# 添加训练/验证数据分割
+train_dataset = dataset.select(range(int(len(dataset) * 0.95)))
+eval_dataset = dataset.select(range(int(len(dataset) * 0.95), len(dataset)))
+
 trainer = SFTTrainer(
     model = model,
     tokenizer = tokenizer,
-    train_dataset = dataset,
-    eval_dataset = None, # Can set up evaluation!
+    train_dataset = train_dataset,  # 使用分割后的训练数据
+    eval_dataset = eval_dataset,    # 添加评估数据集
     args = SFTConfig(
         dataset_text_field = "text",
         output_dir = "./training_outputs",  # 输出目录，TensorBoard日志将保存在这里
         logging_dir = "./training_logs",    # TensorBoard日志目录
         per_device_train_batch_size = 2,
         gradient_accumulation_steps = 4, # Use GA to mimic batch size!
-        warmup_steps = 5,
-        # num_train_epochs = 1, # Set this for 1 full training run.
-        max_steps = 30,
-        learning_rate = 2e-4, # Reduce to 2e-5 for long training runs
+        warmup_steps = 50,              # 大幅增加warmup步数
+        num_train_epochs = 1.0,         # 先训练1个epoch观察效果
+        # max_steps = 30,
+        learning_rate = 5e-5,           # 大幅降低学习率
         logging_steps = 1,
         logging_strategy = "steps",         # 按步数记录日志
-        save_steps = 10,                    # 每10步保存一次模型
+        eval_steps = 50,                    # 每50步评估一次
+        save_steps = 100,                   # 增加保存间隔
         save_strategy = "steps",            # 按步数保存
         optim = "adamw_8bit",
         weight_decay = 0.01,
-        lr_scheduler_type = "linear",
+        lr_scheduler_type = "cosine",       # 改用cosine调度器
         seed = 3407,
         report_to = "tensorboard",          # 使用TensorBoard进行监控
-        run_name = "gemma3-finetune",       # 运行名称
+        run_name = "gemma3-finetune-v2",
         dataloader_num_workers = 2,         # 数据加载器的工作进程数
+        # fp16 = True,                      # Gemma3不支持fp16，自动使用float32
+        gradient_checkpointing = True,      # 启用梯度检查点节省内存
     ),
 )
 
