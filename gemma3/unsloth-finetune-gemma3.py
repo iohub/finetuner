@@ -6,6 +6,40 @@ from unsloth.chat_templates import standardize_data_formats
 from trl import SFTTrainer, SFTConfig
 from unsloth.chat_templates import train_on_responses_only
 import os
+import time
+import glob
+from transformers import TrainerCallback
+
+# 自定义回调函数，在每次保存后让GPU休息15秒
+class GPURestCallback(TrainerCallback):
+    def on_save(self, args, state, control, **kwargs):
+        print("模型已保存，GPU休息15秒...")
+        time.sleep(15)
+        print("GPU休息完成，继续训练")
+
+# 检查和获取最新的checkpoint
+def get_latest_checkpoint(output_dir):
+    """
+    获取输出目录中最新的checkpoint路径
+    """
+    if not os.path.exists(output_dir):
+        print(f"输出目录 {output_dir} 不存在，将从头开始训练")
+        return None
+    
+    # 查找所有checkpoint目录
+    checkpoint_pattern = os.path.join(output_dir, "checkpoint-*")
+    checkpoints = glob.glob(checkpoint_pattern)
+    
+    if not checkpoints:
+        print(f"在 {output_dir} 中未找到checkpoint，将从头开始训练")
+        return None
+    
+    # 按checkpoint编号排序，获取最新的
+    checkpoints.sort(key=lambda x: int(x.split('-')[-1]))
+    latest_checkpoint = checkpoints[-1]
+    
+    print(f"找到最新checkpoint: {latest_checkpoint}")
+    return latest_checkpoint
 
 # Fix for dynamo recompilation limit issue
 torch._dynamo.config.cache_size_limit = 64
@@ -59,6 +93,12 @@ dataset = dataset.map(formatting_prompts_func, batched = True)
 train_dataset = dataset.select(range(int(len(dataset) * 0.95)))
 eval_dataset = dataset.select(range(int(len(dataset) * 0.95), len(dataset)))
 
+# 定义输出目录
+output_dir = "./training_outputs"
+
+# 检查是否有可以恢复的checkpoint
+latest_checkpoint = get_latest_checkpoint(output_dir)
+
 trainer = SFTTrainer(
     model = model,
     tokenizer = tokenizer,
@@ -66,7 +106,7 @@ trainer = SFTTrainer(
     eval_dataset = eval_dataset,    # 添加评估数据集
     args = SFTConfig(
         dataset_text_field = "text",
-        output_dir = "./training_outputs",  # 输出目录，TensorBoard日志将保存在这里
+        output_dir = output_dir,            # 输出目录，TensorBoard日志将保存在这里
         logging_dir = "./training_logs",    # TensorBoard日志目录
         per_device_train_batch_size = 2,
         gradient_accumulation_steps = 4, # Use GA to mimic batch size!
@@ -89,6 +129,7 @@ trainer = SFTTrainer(
         # fp16 = True,                      # Gemma3不支持fp16，自动使用float32
         gradient_checkpointing = True,      # 启用梯度检查点节省内存
     ),
+    callbacks = [GPURestCallback()], # 添加自定义回调
 )
 
 
@@ -109,7 +150,13 @@ max_memory = round(gpu_stats.total_memory / 1024 / 1024 / 1024, 3)
 print(f"GPU = {gpu_stats.name}. Max memory = {max_memory} GB.")
 print(f"{start_gpu_memory} GB of memory reserved.")
 
-trainer_stats = trainer.train()
+# 开始或恢复训练
+if latest_checkpoint:
+    print(f"从checkpoint恢复训练: {latest_checkpoint}")
+    trainer_stats = trainer.train(resume_from_checkpoint=latest_checkpoint)
+else:
+    print("开始新的训练")
+    trainer_stats = trainer.train()
 
 
 
