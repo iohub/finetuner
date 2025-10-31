@@ -16,7 +16,7 @@ def load_llama3_model():
         fast_inference = True, # Enable vLLM fast inference
         max_lora_rank = lora_rank,
         enforce_eager=True,
-        gpu_memory_utilization = 0.9, # Reduce if out of memory
+        gpu_memory_utilization = 0.85, # Reduce if out of memory
     )
 
     model = FastLanguageModel.get_peft_model(
@@ -142,9 +142,9 @@ training_args = GRPOConfig(
     lr_scheduler_type = "cosine",
     optim = "paged_adamw_8bit",
     logging_steps = 1,
-    per_device_train_batch_size = 1,
+    per_device_train_batch_size = 4,
     gradient_accumulation_steps = 1, # Increase to 4 for smoother training
-    num_generations = 6, # Decrease if out of memory
+    num_generations = 4, # Decrease if out of memory
     max_prompt_length = max_prompt_length,
     max_completion_length = max_seq_length - max_prompt_length,
     # num_train_epochs = 1, # Set to 1 for a full training run
