@@ -173,5 +173,8 @@ trainer = GRPOTrainer(
 )
 trainer.train()
 
+# save model
+
+model.save_pretrained_merged("ft_model", tokenizer, save_method = "merged_16bit",)
 
 
