@@ -16,12 +16,10 @@ This repository provides examples for fine-tuning large language models (LLMs) u
 ├── gemma3/                    # Gemma3 model specific files
 ├── qwen2.5-r1/               # Qwen2.5-r1 model specific files
 ├── stacoder2/                # StarCoder2 model specific files
-├── imgs/                     # Visualization assets
-├── plot_log.py              # Script for plotting training logs
 ├── vllm-cli.py              # Command-line interface for inference
 ```
 
 ## Examples
 
 ### *Aha moment on finetuned Qwen2.5-3B*
-<img width="720" src="qwen2.5-r1/imgs/vllm-cli-aho-moment-demo.png" alt="chat view"/><br>
+<img src="qwen2.5-r1/imgs/vllm-cli-aho-moment-demo.png" alt="chat view"/><br>
