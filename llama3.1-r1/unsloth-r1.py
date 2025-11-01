@@ -1,6 +1,7 @@
 
 from unsloth import FastLanguageModel
-import torch
+import re, sys, os
+from datasets import load_dataset, Dataset, concatenate_datasets
 
 
 max_seq_length = 1024 # Can increase for longer reasoning traces
@@ -12,7 +13,7 @@ def load_model():
     model, tokenizer = FastLanguageModel.from_pretrained(
         model_name = model_path,
         max_seq_length = max_seq_length,
-        load_in_4bit = True, # False for LoRA 16bit
+        load_in_4bit = False, # False for LoRA 16bit
         fast_inference = False, # Enable vLLM fast inference
         max_lora_rank = lora_rank,
         # enforce_eager=True,
@@ -35,8 +36,6 @@ def load_model():
 
 # data prepare
 
-import re
-from datasets import load_dataset, Dataset
 
 # Load and prep dataset
 SYSTEM_PROMPT = """
@@ -68,17 +67,43 @@ def extract_hash_answer(text: str) -> str | None:
         return None
     return text.split("####")[1].strip()
 
-# uncomment middle messages for 1-shot prompting
+def extract_hash_answer_zh(text: str) -> str | None:
+    if not text or '答案是：' not in text:
+        return None
+    return text.split('答案是：')[1].strip()
+
+
 def get_gsm8k_questions(split = "train") -> Dataset:
-    data = load_dataset('openai/gsm8k', 'main')[split] # type: ignore
-    data = data.map(lambda x: { # type: ignore
+    data = load_dataset('meta-math/GSM8K_zh', 'default')[split] # type: ignore
+    
+    # 1. 1/4 Chinese Corpus 和 3/4 English Corpus
+    data_splits = data.train_test_split(test_size=0.75, seed=42)
+    print(data_splits)
+
+    data_zh = data_splits['test'].map(lambda x: { # type: ignore
+        'prompt': [
+            {'role': 'system', 'content': SYSTEM_PROMPT},
+            {'role': 'user', 'content': x['question_zh']}
+        ],
+        'answer': extract_hash_answer_zh(x['answer_zh'])
+    }, num_proc=4) # type: ignore (可以添加 num_proc 加快处理)
+    data_zh = data_zh.filter(lambda x: x['answer'] is not None, num_proc=4)
+    print(data_zh[:10])
+    
+    data_en = data_splits['train'].map(lambda x: { # type: ignore
         'prompt': [
             {'role': 'system', 'content': SYSTEM_PROMPT},
             {'role': 'user', 'content': x['question']}
         ],
         'answer': extract_hash_answer(x['answer'])
-    }) # type: ignore
-    return data # type: ignore
+    }, num_proc=4) # type: ignore (可以添加 num_proc 加快处理)
+    data_en = data_en.filter(lambda x: x['answer'] is not None, num_proc=4)
+    print('='*50)
+    print(data_en[:10])
+
+    combined_data = concatenate_datasets([data_zh, data_en])
+    combined_data = combined_data.shuffle(seed=42)
+    return combined_data # type: ignore
 
 dataset = get_gsm8k_questions()
 
@@ -128,9 +153,33 @@ def xmlcount_reward_func(completions, **kwargs) -> list[float]:
     return [count_xml(c) for c in contents]
 
 
+def count_chinese_by_regex(text):
+    chinese_chars = re.findall(r'[\u4e00-\u9fa5]', text)
+    return len(chinese_chars)
+
+
+def reward_lang(text) -> float:
+    score = 0.125
+    chinese_count = count_chinese_by_regex(text)
+    if chinese_count > len(text) * 0.85:
+        score = 3
+    elif chinese_count > len(text) * 0.5:
+        score = 2
+    elif chinese_count > len(text) * 0.2:
+        score = 1
+    else:
+        score = 0.5
+
+    return score
+
+def lang_reward_func(completions, **kwargs) -> list[float]:
+    contents = [completion[0]["content"] for completion in completions]
+    return [reward_lang(c) for c in contents]
+
+
 # tranning model
 
-max_prompt_length = 256
+max_prompt_length = 512
 from trl import GRPOConfig, GRPOTrainer
 
 training_args = GRPOConfig(
@@ -142,8 +191,8 @@ training_args = GRPOConfig(
     lr_scheduler_type = "cosine",
     optim = "paged_adamw_8bit",
     logging_steps = 1,
-    per_device_train_batch_size = 2,
-    gradient_accumulation_steps = 1, # Increase to 4 for smoother training
+    per_device_train_batch_size = 4,
+    gradient_accumulation_steps = 2, # Increase to 4 for smoother training
     num_generations = 4, # Decrease if out of memory
     max_prompt_length = max_prompt_length,
     max_completion_length = max_seq_length - max_prompt_length,
@@ -168,6 +217,7 @@ trainer = GRPOTrainer(
         strict_format_reward_func,
         int_reward_func,
         correctness_reward_func,
+        lang_reward_func,
     ],
     args = training_args,
     train_dataset = dataset,
