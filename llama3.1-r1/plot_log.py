@@ -46,13 +46,14 @@ def write_log_history_to_tensorboard(json_file_path, log_dir):
         for key, value in log_entry.items():
             # 过滤掉非数值类型和不需要的键
             if isinstance(value, (int, float)) and key not in ['step', 'epoch', 'train_runtime', 'train_samples_per_second', 'train_steps_per_second']:
-                
                 # TensorBoard 通常使用斜杠来分组。
                 # 训练集指标通常有 'loss'，验证集指标通常有 'eval_loss' 等。
                 if key.startswith('eval_'):
                     tag = f"eval/{key.replace('eval_', '')}"
                 elif key == 'loss' or key == 'learning_rate':
                     tag = f"train/{key}"
+                elif key.startswith('rewards'):
+                    tag = f"rewards/{key}"
                 else:
                     tag = f"misc/{key}"
                     
