@@ -7,7 +7,7 @@ max_seq_length = 1024 # Can increase for longer reasoning traces
 lora_rank = 32 # Larger rank = smarter, but slower
 
 def load_llama3_model():
-    model_path = '/home/do/ssd/modelscope/hub/models/LLM-Research/Meta-Llama-3___1-8B-Instruct'
+    model_path = '/home/do/ssd/modelscope/hub/models/Qwen/Qwen2.5-3B-Instruct'
 
     model, tokenizer = FastLanguageModel.from_pretrained(
         model_name = model_path,
@@ -142,7 +142,7 @@ training_args = GRPOConfig(
     lr_scheduler_type = "cosine",
     optim = "paged_adamw_8bit",
     logging_steps = 1,
-    per_device_train_batch_size = 4,
+    per_device_train_batch_size = 2,
     gradient_accumulation_steps = 1, # Increase to 4 for smoother training
     num_generations = 4, # Decrease if out of memory
     max_prompt_length = max_prompt_length,
@@ -157,6 +157,7 @@ training_args = GRPOConfig(
 
 model, tokenizer = load_llama3_model()
 
+print('train datasets:{}'.format(len(dataset)))
 
 trainer = GRPOTrainer(
     model = model,
