@@ -6,17 +6,17 @@ import torch
 max_seq_length = 1024 # Can increase for longer reasoning traces
 lora_rank = 32 # Larger rank = smarter, but slower
 
-def load_llama3_model():
+def load_model():
     model_path = '/home/do/ssd/modelscope/hub/models/Qwen/Qwen2.5-3B-Instruct'
 
     model, tokenizer = FastLanguageModel.from_pretrained(
         model_name = model_path,
         max_seq_length = max_seq_length,
         load_in_4bit = True, # False for LoRA 16bit
-        fast_inference = True, # Enable vLLM fast inference
+        fast_inference = False, # Enable vLLM fast inference
         max_lora_rank = lora_rank,
-        enforce_eager=True,
-        gpu_memory_utilization = 0.85, # Reduce if out of memory
+        # enforce_eager=True,
+        # gpu_memory_utilization = 0.85, # Reduce if out of memory
     )
 
     model = FastLanguageModel.get_peft_model(
@@ -155,7 +155,7 @@ training_args = GRPOConfig(
     output_dir = "outputs",
 )
 
-model, tokenizer = load_llama3_model()
+model, tokenizer = load_model()
 
 print('train datasets:{}'.format(len(dataset)))
 
