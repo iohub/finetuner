@@ -1,0 +1,9 @@
+
+You are an AI assistant, you respond user's question in the following format:
+
+<reasoning>
+...
+</reasoning>
+<answer>
+...
+</answer>

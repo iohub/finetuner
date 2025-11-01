@@ -1,19 +1,13 @@
 import os
 import argparse
 from typing import List, Dict, Any
-
-# 使用 openai 库与 vllm 的 OpenAI 兼容 API 进行交互
 from openai import OpenAI
-
-# 使用 rich 库美化 CLI 界面
 from rich.console import Console
 from rich.panel import Panel
 from rich.text import Text
 
-# 初始化 rich console
 console = Console()
-
-# --- 配置参数与初始化 ---
+SYSTEM_PROMPT_FILE = "system.prompt"
 
 def parse_args():
     """解析命令行参数"""
@@ -43,32 +37,55 @@ def parse_args():
 
 def init_client(host: str) -> OpenAI:
     """初始化 OpenAI 客户端，指向 VLLM 服务"""
-    # VLLM API 兼容 OpenAI，通常不需要 API Key，传入空字符串即可
     return OpenAI(
         base_url=f"{host}/v1",
         api_key="EMPTY" 
     )
+
+def load_system_prompt() -> str | None:
+    """尝试从当前目录加载 system.prompt 文件内容"""
+    if os.path.exists(SYSTEM_PROMPT_FILE):
+        try:
+            with open(SYSTEM_PROMPT_FILE, 'r', encoding='utf-8') as f:
+                content = f.read().strip()
+                if content:
+                    return content
+                else:
+                    console.print(f"[bold yellow]警告:[/bold yellow] {SYSTEM_PROMPT_FILE} 文件为空。")
+                    return None
+        except Exception as e:
+            console.print(f"[bold red]加载 {SYSTEM_PROMPT_FILE} 失败:[/bold red] {e}")
+            return None
+    return None
+
 
 # --- 核心对话逻辑 ---
 
 def chat_loop(client: OpenAI, model: str, max_tokens: int):
     """
     多轮对话循环。
-    
-    :param client: OpenAI 客户端实例
-    :param model: 模型名称
-    :param max_tokens: 最大生成 token 数
     """
     
-    # 存储对话历史，格式兼容 OpenAI Chat Completions API
-    # [{"role": "user", "content": "Hello"}, ...]
     history: List[Dict[str, str]] = []
     
+    # 1. 加载系统提示
+    system_prompt = load_system_prompt()
+    system_prompt_status = "[dim]未加载 system.prompt 文件[/dim]"
+    
+    if system_prompt:
+        # 如果加载了系统提示，将其作为第一个消息添加到历史记录中
+        history.append({"role": "system", "content": system_prompt})
+        system_prompt_status = f"[bold green]已加载 system.prompt[/bold green] ({len(system_prompt)} 字符)"
+        console.print(Panel(f"[bold yellow]System Prompt 内容摘要:[/bold yellow]\n{system_prompt[:100]}...", border_style="yellow"))
+
+
+    # 2. 打印欢迎信息
     console.print(
         Panel(
             f"[bold cyan]VLLM Chat 客户端[/bold cyan]\n"
             f"[yellow]模型:[/yellow] {model}\n"
             f"[yellow]最大 tokens:[/yellow] {max_tokens}\n"
+            f"[yellow]System Prompt:[/yellow] {system_prompt_status}\n"
             f"\n[dim]输入 'exit' 或 'quit' 退出, 'clear' 清空历史。[/dim]",
             title="✨ 欢迎",
             border_style="cyan"
@@ -76,58 +93,54 @@ def chat_loop(client: OpenAI, model: str, max_tokens: int):
     )
 
     while True:
-        # 1. 获取用户输入 (使用 input() 获取用户输入)
+        # 3. 获取用户输入
         try:
             user_input = console.input("[bold green]您 (User):[/bold green] ")
         except EOFError:
-            # 捕获 CTRL+D
             break
         except KeyboardInterrupt:
-            # 捕获 CTRL+C
             break
 
         if user_input.lower() in ["quit", "exit"]:
             break
         
         if user_input.lower() == "clear":
-            history = []
+            # 清空历史，但保留 system prompt (如果存在)
+            history = history[:1] if history and history[0]["role"] == "system" else []
             console.print(Panel("✅ [bold yellow]对话历史已清空。[/bold yellow]", border_style="yellow"))
             continue
 
         if not user_input.strip():
             continue
 
-        # 2. 更新对话历史
+        # 4. 更新对话历史 (用户输入)
         history.append({"role": "user", "content": user_input})
 
-        # 3. 发起流式 API 请求
+        # 5. 发起流式 API 请求
         try:
             console.print("\n[bold magenta]AI (Assistant):[/bold magenta] ", end="")
             
             # 使用 `stream=True` 开启流式传输
             stream = client.chat.completions.create(
                 model=model,
-                messages=history,
+                messages=history, # 包含 system prompt 和所有历史记录
                 max_tokens=max_tokens,
-                temperature=0.0, # 默认低温度，方便测试
-                stream=True,     # 关键：启用流式输出
+                temperature=0.0,
+                stream=True,
             )
             
-            # 用于存储完整的助手回复
             full_response = ""
             
-            # 4. 打印流式回复
+            # 6. 打印流式回复
             for chunk in stream:
-                # 从流中获取内容
                 content = chunk.choices[0].delta.content
                 if content:
-                    # 使用 rich.print() 的实时打印功能
                     console.print(content, end="", soft_wrap=True)
                     full_response += content
 
             console.print() 
             
-            # 5. 将完整的助手回复添加到历史记录中
+            # 7. 将完整的助手回复添加到历史记录中
             history.append({"role": "assistant", "content": full_response})
 
         except Exception as e:
@@ -143,7 +156,10 @@ if __name__ == "__main__":
     args = parse_args()
     
     try:
+        # 1. 初始化客户端
         openai_client = init_client(args.host)
+        
+        # 2. 启动对话循环
         chat_loop(openai_client, args.model, args.max_tokens)
         
     except Exception as e:
