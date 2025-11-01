@@ -3,6 +3,8 @@ from unsloth import FastLanguageModel
 import re, sys, os
 from datasets import load_dataset, Dataset, concatenate_datasets
 
+# TORCH_COMPILE_DISABLE=1
+# TORCH_INDUCTOR_DISABLE_CUDAGRAPHS=1
 
 max_seq_length = 1024 # Can increase for longer reasoning traces
 lora_rank = 32 # Larger rank = smarter, but slower
