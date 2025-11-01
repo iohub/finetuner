@@ -2,6 +2,7 @@
 from unsloth import FastLanguageModel
 import re, sys, os
 from datasets import load_dataset, Dataset, concatenate_datasets
+from functools import wraps
 
 # TORCH_COMPILE_DISABLE=1
 # TORCH_INDUCTOR_DISABLE_CUDAGRAPHS=1
@@ -74,7 +75,37 @@ def extract_hash_answer_zh(text: str) -> str | None:
         return None
     return text.split('答案是：')[1].strip()
 
+def disk_cache(cache_dir: str):
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs) -> Dataset:
+            final_cache_path = os.path.join(cache_dir, func.__name__)
+            
+            # 2. 检查缓存是否存在
+            if os.path.exists(final_cache_path) and os.path.isdir(final_cache_path):
+                print(f"✅ 从本地缓存加载数据: {final_cache_path}")
+                try:
+                    # 使用 load_from_disk 加载 Dataset
+                    cached_data = Dataset.load_from_disk(final_cache_path)
+                    return cached_data
+                except Exception as e:
+                    print(f"⚠️ 无法从缓存加载数据 ({e})，重新生成。")
+            
+            # 3. 缓存不存在，执行原函数生成数据
+            print(f"🔄 本地缓存不存在或加载失败，正在生成数据...")
+            result_dataset = func(*args, **kwargs)
+            
+            # 4. 保存数据到本地缓存
+            print(f"💾 正在将数据保存到本地缓存: {final_cache_path}")
+            os.makedirs(final_cache_path, exist_ok=True)
+            # 使用 save_to_disk 保存 Dataset
+            result_dataset.save_to_disk(final_cache_path)
+            
+            return result_dataset
+        return wrapper
+    return decorator
 
+@disk_cache(cache_dir="./dataset_cache_v1")
 def get_gsm8k_questions(split = "train") -> Dataset:
     data = load_dataset('meta-math/GSM8K_zh', 'default')[split] # type: ignore
     
@@ -199,7 +230,7 @@ training_args = GRPOConfig(
     max_prompt_length = max_prompt_length,
     max_completion_length = max_seq_length - max_prompt_length,
     # num_train_epochs = 1, # Set to 1 for a full training run
-    max_steps = 1200,
+    max_steps = 2400,
     save_steps = 400,
     max_grad_norm = 0.1,
     report_to = "none", # Can use Weights & Biases
@@ -224,8 +255,8 @@ trainer = GRPOTrainer(
     args = training_args,
     train_dataset = dataset,
 )
-trainer.train(resume_from_checkpoint="outputs/checkpoint-800")
 
+trainer.train(resume_from_checkpoint="outputs/checkpoint-1200")
 # save model
 
 model.save_pretrained_merged("ft_model", tokenizer, save_method = "merged_16bit",)
