@@ -197,8 +197,8 @@ training_args = GRPOConfig(
     max_prompt_length = max_prompt_length,
     max_completion_length = max_seq_length - max_prompt_length,
     # num_train_epochs = 1, # Set to 1 for a full training run
-    max_steps = 250,
-    save_steps = 250,
+    max_steps = 1200,
+    save_steps = 400,
     max_grad_norm = 0.1,
     report_to = "none", # Can use Weights & Biases
     output_dir = "outputs",
@@ -222,7 +222,7 @@ trainer = GRPOTrainer(
     args = training_args,
     train_dataset = dataset,
 )
-trainer.train()
+trainer.train(resume_from_checkpoint="outputs/checkpoint-800")
 
 # save model
 
