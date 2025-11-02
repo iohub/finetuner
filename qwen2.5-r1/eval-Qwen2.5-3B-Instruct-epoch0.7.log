@@ -1,0 +1,9 @@
+
+
+num: 100
+true_total: 74
+<reasoning> The second friend pressed the doorbell 20 * 1/4 = 5 more times than Jerome's first friend. So, the second friend pressed the doorbell 20 + 5 = 25 times. The third friend pressed the doorbell 60 + 10 = 70 times. The total number of doorbell rings is 20 + 25 + 60 + 70 = 175. </reasoning>
+<answer>175</answer>
+[ok] |175| |175|
+****************************************************************************************************
+0.7326732673267327
