@@ -29,8 +29,8 @@ generation_config = dict(
 )
 
 
-model_path = '/home/do/ssd/iohub/finetuner/qwen2.5-r1/ft_step2400_epoch0.7'
-# model_path = '/home/do/ssd/modelscope/hub/models/Qwen/Qwen2.5-3B-Instruct'
+# model_path = '/home/do/ssd/iohub/finetuner/qwen2.5-r1/ft_step2400_epoch0.7'
+model_path = '/home/do/ssd/modelscope/hub/models/Qwen/Qwen2.5-3B-Instruct'
 
 tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
 
@@ -93,7 +93,7 @@ total = 0
 true_total = 0
 fw = open("temp/result.jsonl", 'w', encoding='utf-8')
 for question, answer in zip(question_list, answer_list):
-    if total > 100: break
+    if total > 200: break
     messages = [
         {'role': 'system', 'content': SYSTEM_PROMPT},
         {'role': 'user', 'content': question},  # q1

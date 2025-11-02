@@ -8,3 +8,9 @@ true_total: 66
 0.6534653465346535
 
 
+num: 200
+true_total: 130
+<reasoning> Baldur gets 5 pails of water in the morning and 6 pails in the afternoon. Each pail contains 5 liters of water. Therefore, the total pails of water he gets in a day is 5 + 6. To find the total liters of water, we multiply the total pails by the liters each pail contains. So the total liters of water he gets every day is (5 + 6) * 5. </reasoning>
+<answer>(5 + 6) * 5</answer>
+****************************************************************************************************
+0.6467661691542289

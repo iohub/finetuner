@@ -52,8 +52,8 @@ def write_log_history_to_tensorboard(json_file_path, log_dir):
                     tag = f"eval/{key.replace('eval_', '')}"
                 elif key == 'loss' or key == 'learning_rate':
                     tag = f"train/{key}"
-                elif key.startswith('rewards'):
-                    tag = f"rewards/{key}"
+                elif key.startswith('rewards/'):
+                    tag = key
                 else:
                     tag = f"misc/{key}"
                     
