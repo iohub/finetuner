@@ -2,7 +2,7 @@
 
 ### **gsm8k效果评估**
 
-| 模型版本 | 数据量 (num) | 真实总数 (true_total) | 准确率 (Accuracy) |
+| 模型版本 | 数据量 (num) | 正确解答数量 | 准确率 (Accuracy) |
 | :--- | :--- | :--- | :--- |
 | **eval-Qwen2.5-3B-Instruct-epoch0.7** | 100 | 74 | $0.7327$ |
 | **eval-Qwen2.5-3B-Instruct** | 100 | 66 | $0.6535$ |
